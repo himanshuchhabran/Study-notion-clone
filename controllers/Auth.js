@@ -2,6 +2,8 @@ const User = require("../models/User");
 const OTP = require("../models/Otp");
 const otpGenerator = require("otp-generator");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
 //sendOtp
 
@@ -208,22 +210,25 @@ exports.login = async (req, res) => {
 
     // Generate JWT token and Compare Password
     if (await bcrypt.compare(password, user.password)) {
-      const token = jwt.sign(
+      const token = jwt.sign( 
         { email: user.email, id: user._id, role: user.role },
         process.env.JWT_SECRET,
         {
           expiresIn: "24h",
         }
-      )
+      );
 
       // Save token to user document in database
-      user.token = token
-      user.password = undefined
+      user.token = token;
+      user.password = undefined;
+
       // Set cookie for token and return success response
+
       const options = {
         expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
         httpOnly: true,
       }
+      
       res.cookie("token", token, options).status(200).json({
         success: true,
         token,
@@ -247,3 +252,67 @@ exports.login = async (req, res) => {
 }
 
 //changepassword
+
+exports.changePassword = async (req, res) => {
+  try {
+    // Get user data from req.user
+    const userDetails = await User.findById(req.user.id)
+
+    // Get old password, new password, and confirm new password from req.body
+    const { oldPassword, newPassword } = req.body
+
+    // Validate old password
+    const isPasswordMatch = await bcrypt.compare(
+      oldPassword,
+      userDetails.password
+    )
+    if (!isPasswordMatch) {
+      // If old password does not match, return a 401 (Unauthorized) error
+      return res
+        .status(401)
+        .json({ success: false, message: "The password is incorrect" })
+    }
+
+    // Update password
+    const encryptedPassword = await bcrypt.hash(newPassword, 10)
+    const updatedUserDetails = await User.findByIdAndUpdate(
+      req.user.id,
+      { password: encryptedPassword },
+      { new: true }
+    )
+
+    // Send notification email
+    try {
+      const emailResponse = await mailSender(
+        updatedUserDetails.email,
+        "Password for your account has been updated",
+        passwordUpdated(
+          updatedUserDetails.email,
+          `Password updated successfully for ${updatedUserDetails.firstName} ${updatedUserDetails.lastName}`
+        )
+      )
+      console.log("Email sent successfully:", emailResponse.response)
+    } catch (error) {
+      // If there's an error sending the email, log the error and return a 500 (Internal Server Error) error
+      console.error("Error occurred while sending email:", error)
+      return res.status(500).json({
+        success: false,
+        message: "Error occurred while sending email",
+        error: error.message,
+      })
+    }
+
+    // Return success response
+    return res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" })
+  } catch (error) {
+    // If there's an error updating the password, log the error and return a 500 (Internal Server Error) error
+    console.error("Error occurred while updating password:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Error occurred while updating password",
+      error: error.message,
+    })
+  }
+}
