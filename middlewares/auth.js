@@ -47,9 +47,8 @@ exports.auth = async (req, res, next) => {
 // This function is used as middleware to authenticate user requests
 exports.isStudent = async (req, res, next) => {
 	try {
-		const userDetails = await User.findOne({ email: req.user.email });
 
-		if (userDetails.accountType !== "Student") {
+		if (req.user.accountType !== "Student") {
 			return res.status(401).json({
 				success: false,
 				message: "This is a Protected Route for Students",
@@ -64,5 +63,39 @@ exports.isStudent = async (req, res, next) => {
 };
 
 //isInstructor
+exports.isInstructor = async (req, res, next) => {
+	try {
+
+		if (req.user.accountType !== "Instructor") {
+			return res.status(401).json({
+				success: false,
+				message: "This is a Protected Route for Instructor",
+			});
+		}
+		next();
+	} catch (error) {
+		return res
+			.status(500)
+			.json({ success: false, message: `User Role Can't be Verified` });
+	}
+};
+
 
 //isAdmin
+
+exports.isAdmin = async (req, res, next) => {
+	try {
+
+		if (req.user.accountType !== "isAdmin") {
+			return res.status(401).json({
+				success: false,
+				message: "This is a Protected Route for Admin",
+			});
+		}
+		next();
+	} catch (error) {
+		return res
+			.status(500)
+			.json({ success: false, message: `User Role Can't be Verified` });
+	}
+};
